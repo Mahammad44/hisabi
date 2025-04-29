@@ -1,0 +1,13 @@
+image: rust
+
+tasks:
+  - name: Setup
+    init: |
+      cargo build
+    command: |
+      cargo run
+
+ports:
+  - port: 8080
+    onOpen: open-preview
+
