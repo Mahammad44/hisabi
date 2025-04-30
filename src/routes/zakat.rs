@@ -1,36 +1,36 @@
-use axum::{Router, routing::post, Json};
-use serde::{Deserialize, Serialize};
+use axum::Json;
+use crate::models::{ZakatRequest, ZakatResponse};
 
-pub fn zakat_routes() -> Router {
-    Router::new().route("/calculate", post(calculate_zakat))
+const GOLD_NISAB_GRAMS: f64 = 85.0;
+const SILVER_NISAB_GRAMS: f64 = 595.0;
+const GOLD_PRICE_PER_GRAM: f64 = 60.0;
+const SILVER_PRICE_PER_GRAM: f64 = 0.7;
+
+pub async fn calculate_zakat(Json(payload): Json<ZakatRequest>) -> Json<ZakatResponse> {
+    let gold_value = payload.gold_grams * GOLD_PRICE_PER_GRAM;
+    let silver_value = payload.silver_grams * SILVER_PRICE_PER_GRAM;
+    let net_assets = payload.cash + gold_value + silver_value - payload.debts;
+
+    let gold_threshold = GOLD_NISAB_GRAMS * GOLD_PRICE_PER_GRAM;
+    let silver_threshold = SILVER_NISAB_GRAMS * SILVER_PRICE_PER_GRAM;
+
+    let zakat_due = if net_assets >= gold_threshold {
+        net_assets * 0.025
+    } else if net_assets >= silver_threshold {
+        net_assets * 0.025
+    } else {
+        0.0
+    };
+
+    let message = if zakat_due > 0.0 {
+        if net_assets >= gold_threshold {
+            format!("You owe ${:.2} based on gold nisab (85 g).", zakat_due)
+        } else {
+            format!("You owe ${:.2} based on silver nisab (595 g).", zakat_due)
+        }
+    } else {
+        "No zakat due: your net assets did not meet either nisab threshold.".into()
+    };
+
+    Json(ZakatResponse { zakat_due, message })
 }
-
-#[derive(Deserialize)]
-pub struct ZakatRequest {
-    pub cash: f64,
-    pub gold_grams: f64,
-    pub debts: f64,
-}
-
-#[derive(Serialize)]
-pub struct ZakatResponse {
-    pub zakat_due: f64,
-    pub nisab_threshold: f64,
-    pub is_obligatory: bool,
-}
-
-async fn calculate_zakat(Json(payload): Json<ZakatRequest>) -> Json<ZakatResponse> {
-    let gold_price_per_gram = 59.5; // Static for now, could be dynamic later
-    let nisab_threshold = gold_price_per_gram * 100.0;
-
-    let net_assets = payload.cash + (payload.gold_grams * gold_price_per_gram) - payload.debts;
-    let is_obligatory = net_assets >= nisab_threshold;
-    let zakat_due = if is_obligatory { net_assets * 0.025 } else { 0.0 };
-
-    Json(ZakatResponse {
-        zakat_due,
-        nisab_threshold,
-        is_obligatory,
-    })
-}
-
